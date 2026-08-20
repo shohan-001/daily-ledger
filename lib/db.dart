@@ -21,6 +21,11 @@ void configureSqliteLoader() {
       sqlite_open.OperatingSystem.linux,
       _openBundledSqlite,
     );
+  } else if (Platform.isWindows) {
+    sqlite_open.open.overrideFor(
+      sqlite_open.OperatingSystem.windows,
+      _openWindowsSqlite,
+    );
   }
 }
 
@@ -40,6 +45,24 @@ DynamicLibrary _openBundledSqlite() {
     }
   }
   throw StateError('Could not load bundled SQLite: $lastError');
+}
+
+/// sqlite3_flutter_libs copies sqlite3.dll next to the .exe on Windows.
+DynamicLibrary _openWindowsSqlite() {
+  final String exeDir = File(Platform.resolvedExecutable).parent.path;
+  final List<String> candidates = <String>[
+    p.join(exeDir, 'sqlite3.dll'),
+    'sqlite3.dll',
+  ];
+  Object? lastError;
+  for (final String path in candidates) {
+    try {
+      return DynamicLibrary.open(path);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw StateError('Could not load sqlite3.dll: $lastError');
 }
 
 /// Everything that touches SQLite lives here. Calls are synchronous, which is

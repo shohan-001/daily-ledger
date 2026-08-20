@@ -1,0 +1,51 @@
+name: Windows exe
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Dependencies
+        run: flutter pub get
+
+      - name: Build release
+        run: |
+          New-Item -ItemType Directory -Force -Path build/native_assets/windows | Out-Null
+          flutter build windows --release
+
+      - name: Zip the runnable folder
+        run: |
+          $src = "build/windows/x64/runner/Release"
+          if (-not (Test-Path "$src/dailyledger.exe")) {
+            throw "dailyledger.exe was not produced"
+          }
+          Compress-Archive -Path "$src\*" -DestinationPath "dailyledger-windows-x64.zip" -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dailyledger-windows-x64
+          path: dailyledger-windows-x64.zip
+
+      - name: Attach zip to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dailyledger-windows-x64.zip

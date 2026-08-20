@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 // ---------------------------------------------------------------------------
 
 const String kAppName = 'DailyLedger';
-const String kAppVersion = '0.2.5';
+const String kAppVersion = '0.2.6';
 
 const String kDeveloperName = 'Shohan';
 const String kGitHubProfileUrl = 'https://github.com/shohan-001';

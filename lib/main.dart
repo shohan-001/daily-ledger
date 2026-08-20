@@ -12,11 +12,12 @@ Future<void> main() async {
   configureSqliteLoader();
   WidgetsFlutterBinding.ensureInitialized();
   if (kIsMobile) {
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.light,
-        systemNavigationBarColor: kSurface,
+        systemNavigationBarColor: Colors.transparent,
         systemNavigationBarIconBrightness: Brightness.light,
       ),
     );

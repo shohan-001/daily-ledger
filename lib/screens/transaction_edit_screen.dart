@@ -226,10 +226,12 @@ class _TransactionEditScreenState extends State<TransactionEditScreen> {
             ),
         ],
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
-          child: Column(
+      body: SafeArea(
+        top: false,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Column(
             children: <Widget>[
               Expanded(
                 child: ListView(
@@ -427,6 +429,7 @@ class _TransactionEditScreenState extends State<TransactionEditScreen> {
               ),
             ],
           ),
+        ),
         ),
       ),
     );

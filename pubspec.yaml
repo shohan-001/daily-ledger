@@ -1,7 +1,7 @@
 name: dailyledger
 description: Minimal offline personal budget tracker. Cash + card, one currency, one local SQLite file.
 publish_to: "none"
-version: 0.2.5+7
+version: 0.2.6+8
 
 environment:
   sdk: ">=3.5.0 <4.0.0"

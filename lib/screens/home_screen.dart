@@ -114,67 +114,106 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-class _BalancePanel extends StatelessWidget {
+class _BalancePanel extends StatefulWidget {
   const _BalancePanel({required this.store});
 
   final AppStore store;
 
   @override
-  Widget build(BuildContext context) => Panel(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  State<_BalancePanel> createState() => _BalancePanelState();
+}
+
+class _BalancePanelState extends State<_BalancePanel> {
+  /// Home stays on cash. Swipe left to see cash + bank as a total.
+  bool _showTotal = false;
+
+  bool _isCash(Account account) =>
+      account.name.trim().toLowerCase() == 'cash';
+
+  Widget _accountLine(String name, double amount) => Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(
           children: <Widget>[
-            const PanelTitle('Total balance'),
-            const SizedBox(height: 6),
-            Text(
-              formatMoney(store.totalBalance),
-              style: TextStyle(
-                fontSize: 30,
-                fontWeight: FontWeight.w700,
-                color: store.totalBalance < 0 ? kExpense : kText,
+            Expanded(
+              child: Text(
+                name,
+                style: const TextStyle(color: kTextMuted, fontSize: 13),
               ),
             ),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: store.accounts
-                  .map(
-                    (Account account) => Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: kSurfaceAlt,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: kBorder),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: <Widget>[
-                          Text(
-                            account.name,
-                            style: const TextStyle(
-                              color: kTextMuted,
-                              fontSize: 12,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            formatMoney(account.currentBalance),
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                  .toList(),
+            Text(
+              formatMoney(amount),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
             ),
           ],
         ),
       );
+
+  @override
+  Widget build(BuildContext context) {
+    final AppStore store = widget.store;
+    final List<Account> cashNamed =
+        store.accounts.where(_isCash).toList();
+    final Account? pocket;
+    final List<Account> bank;
+    if (cashNamed.isNotEmpty) {
+      pocket = cashNamed.first;
+      bank = store.accounts.where((Account a) => !_isCash(a)).toList();
+    } else if (store.accounts.isNotEmpty) {
+      pocket = store.accounts.first;
+      bank = store.accounts.skip(1).toList();
+    } else {
+      pocket = null;
+      bank = const <Account>[];
+    }
+    final double cashAmount = pocket?.currentBalance ?? 0;
+
+    return GestureDetector(
+      onHorizontalDragEnd: (DragEndDetails details) {
+        final double v = details.primaryVelocity ?? 0;
+        if (bank.isEmpty) return;
+        if (v < -200) setState(() => _showTotal = true);
+        if (v > 200) setState(() => _showTotal = false);
+      },
+      child: Panel(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            PanelTitle(_showTotal ? 'Total balance' : 'Cash'),
+            const SizedBox(height: 6),
+            Text(
+              formatMoney(_showTotal ? store.totalBalance : cashAmount),
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w700,
+                color: (_showTotal ? store.totalBalance : cashAmount) < 0
+                    ? kExpense
+                    : kText,
+              ),
+            ),
+            if (_showTotal) ...<Widget>[
+              const SizedBox(height: 12),
+              if (pocket != null) _accountLine(pocket.name, cashAmount),
+              ...bank.map(
+                (Account account) =>
+                    _accountLine(account.name, account.currentBalance),
+              ),
+              const Text(
+                'Swipe right to show cash only.',
+                style: TextStyle(color: kTextMuted, fontSize: 11),
+              ),
+            ] else if (bank.isNotEmpty)
+              const Padding(
+                padding: EdgeInsets.only(top: 10),
+                child: Text(
+                  'Swipe left for total (cash + bank).',
+                  style: TextStyle(color: kTextMuted, fontSize: 11),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _MonthPanel extends StatelessWidget {

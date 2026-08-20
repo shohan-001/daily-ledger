@@ -48,34 +48,40 @@ class _RootShellState extends State<RootShell> {
     // narrow desktop window does not switch layouts.
     if (kIsMobile) {
       return Scaffold(
-        body: SafeArea(child: pages[_index]),
-        bottomNavigationBar: NavigationBar(
-          backgroundColor: kSurface,
-          indicatorColor: kAccentFaint,
-          selectedIndex: _index,
-          onDestinationSelected: _go,
-          destinations: const <Widget>[
-            NavigationDestination(
-              icon: Icon(Icons.dashboard_outlined),
-              selectedIcon: Icon(Icons.dashboard),
-              label: 'Home',
+        body: SafeArea(bottom: false, child: pages[_index]),
+        bottomNavigationBar: ColoredBox(
+          color: kSurface,
+          child: SafeArea(
+            top: false,
+            child: NavigationBar(
+              backgroundColor: kSurface,
+              indicatorColor: kAccentFaint,
+              selectedIndex: _index,
+              onDestinationSelected: _go,
+              destinations: const <Widget>[
+                NavigationDestination(
+                  icon: Icon(Icons.dashboard_outlined),
+                  selectedIcon: Icon(Icons.dashboard),
+                  label: 'Home',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.receipt_long_outlined),
+                  selectedIcon: Icon(Icons.receipt_long),
+                  label: 'History',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.pie_chart_outline),
+                  selectedIcon: Icon(Icons.pie_chart),
+                  label: 'Budgets',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.settings_outlined),
+                  selectedIcon: Icon(Icons.settings),
+                  label: 'Settings',
+                ),
+              ],
             ),
-            NavigationDestination(
-              icon: Icon(Icons.receipt_long_outlined),
-              selectedIcon: Icon(Icons.receipt_long),
-              label: 'History',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.pie_chart_outline),
-              selectedIcon: Icon(Icons.pie_chart),
-              label: 'Budgets',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.settings_outlined),
-              selectedIcon: Icon(Icons.settings),
-              label: 'Settings',
-            ),
-          ],
+          ),
         ),
       );
     }
