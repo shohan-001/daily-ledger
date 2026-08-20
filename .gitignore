@@ -1,0 +1,34 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+# Directory or symlink (this project uses `build` → /tmp/dailyledger-build).
+# A trailing slash only matches a real directory, so the symlink would otherwise
+# get committed and point at a machine-specific /tmp path.
+/build
+/build/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Flutter tooling
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Release artifacts
+debug_info/
+package/build/
+*.deb
+*.apk
+*.aab
+
+# Android signing (keep these files — needed to install updates over the same app)
+android/key.properties
+android/keystore/
+
+# Local notes / Gradle output (not part of the public tree)
+android/build/
+budget-app-build-prompt.md

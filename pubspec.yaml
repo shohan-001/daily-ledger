@@ -1,0 +1,36 @@
+name: dailyledger
+description: Minimal offline personal budget tracker. Cash + card, one currency, one local SQLite file.
+publish_to: "none"
+version: 0.2.4+6
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+# Every dependency here needs a reason. Current list:
+#   provider    - ChangeNotifier plumbing, nothing else
+#   sqlite3     - direct SQLite access, no code generation (uses system libsqlite3 on Linux)
+#   sqlite3_flutter_libs - ships libsqlite3 inside the Android/iOS APK
+#   path / path_provider - database and export paths
+#   file_selector - pick a .db backup to import
+#   share_plus - send the backup off the phone (Drive, Bluetooth, Files)
+#   local_auth - Android fingerprint / face / PIN lock (no-op on Linux)
+# Deliberately absent: drift, fl_chart, intl, Firebase, any icon or font pack.
+dependencies:
+  flutter:
+    sdk: flutter
+  provider: ^6.1.5
+  sqlite3: ^2.9.0
+  sqlite3_flutter_libs: ^0.5.39
+  path: ^1.9.0
+  path_provider: ^2.1.5
+  file_selector: ^1.0.3
+  share_plus: ^10.1.4
+  local_auth: ^2.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true

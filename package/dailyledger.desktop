@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=DailyLedger
+GenericName=Budget Tracker
+Comment=Minimal offline personal budget tracker
+Exec=/usr/bin/dailyledger
+Path=/usr/lib/dailyledger
+Icon=/usr/share/icons/hicolor/scalable/apps/dailyledger.svg
+Terminal=false
+Categories=Office;Finance;
+Keywords=budget;money;expenses;cash;ledger;
+StartupWMClass=com.dailyledger.dailyledger
+DBusActivatable=false
+
