@@ -302,10 +302,10 @@ class _DataSectionState extends State<_DataSection> {
           const PanelTitle('Sync Linux ↔ phone'),
           const SizedBox(height: 8),
           Text(
-            '${store.transactionCount} transactions on this device. No cloud '
-            'account — copy a backup file, or send it over the same Wi-Fi. '
-            'The receiving device is fully replaced by the sending one, so '
-            'always send from the copy you last used.',
+            '${store.transactionCount} transactions on this device. Copy a '
+            'backup file, send over the same Wi-Fi, or use a cloud slot over '
+            'any internet. The receiving device is fully replaced, so always '
+            'send from the copy you last used.',
             style: const TextStyle(color: kTextMuted, fontSize: 12),
           ),
           const SizedBox(height: 12),
@@ -336,6 +336,11 @@ class _DataSectionState extends State<_DataSection> {
                 onPressed: _busy ? null : () => showReceiveWifiDialog(context),
                 icon: const Icon(Icons.wifi, size: 18),
                 label: const Text('Receive over Wi-Fi'),
+              ),
+              FilledButton.icon(
+                onPressed: _busy ? null : () => showCloudSyncDialog(context),
+                icon: const Icon(Icons.cloud_outlined, size: 18),
+                label: const Text('Sync over internet'),
               ),
             ],
           ),

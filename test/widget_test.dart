@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:dailyledger/cloud_sync.dart';
 import 'package:dailyledger/constants.dart';
 import 'package:dailyledger/models.dart';
 
@@ -45,6 +46,17 @@ void main() {
       borrowed: 200,
     );
     expect(both.net, 300);
+  });
+
+  test('cloud slot URL points at one Firebase node', () {
+    expect(
+      cloudSlotUrl(
+        'https://demo-default-rtdb.asia-southeast1.firebasedatabase.app/',
+        'ab12-cd34',
+      ),
+      'https://demo-default-rtdb.asia-southeast1.firebasedatabase.app/dailyledger/AB12CD34.json',
+    );
+    expect(formatSyncCode('ab12cd34'), 'AB12-CD34');
   });
 
   test('recurring next due is today or later', () {

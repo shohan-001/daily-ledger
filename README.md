@@ -26,8 +26,8 @@ multi-currency or translation machinery.
 - **Budgets** — one monthly limit per category plus an overall limit, each with a
   spent-so-far bar, and a hand-drawn spend-by-category bar chart.
 - **Settings** — manage accounts, categories, quick-add presets and monthly
-  recurring rules; export every transaction to CSV; see where the database file
-  lives.
+  recurring rules; export CSV; Wi-Fi or internet sync (whole-file replace);
+  see where the database file lives.
 
 Recurring rules are checked **once at launch** and always ask for confirmation —
 nothing is posted silently, and there are no background timers.

@@ -1,7 +1,7 @@
 name: dailyledger
 description: Minimal offline personal budget tracker. Cash + card, one currency, one local SQLite file.
 publish_to: "none"
-version: 0.2.4+6
+version: 0.2.5+7
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -14,7 +14,8 @@ environment:
 #   file_selector - pick a .db backup to import
 #   share_plus - send the backup off the phone (Drive, Bluetooth, Files)
 #   local_auth - Android fingerprint / face / PIN lock (no-op on Linux)
-# Deliberately absent: drift, fl_chart, intl, Firebase, any icon or font pack.
+#   http - optional internet sync (Firebase Realtime Database REST, no FlutterFire)
+# Deliberately absent: drift, fl_chart, intl, Firebase SDK, any icon or font pack.
 dependencies:
   flutter:
     sdk: flutter
@@ -26,6 +27,7 @@ dependencies:
   file_selector: ^1.0.3
   share_plus: ^10.1.4
   local_auth: ^2.3.0
+  http: ^1.2.2
 
 dev_dependencies:
   flutter_test:

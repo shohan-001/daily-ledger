@@ -11,7 +11,7 @@
 set -euo pipefail
 
 PKG_NAME="dailyledger"
-VERSION="${1:-0.2.4}"
+VERSION="${1:-0.2.5}"
 ARCH="amd64"
 MAINTAINER="${DEB_MAINTAINER:-Shohan <shohan@localhost>}"
 

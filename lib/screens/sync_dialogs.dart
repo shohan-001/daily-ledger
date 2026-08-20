@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../backup.dart';
+import '../cloud_sync.dart';
 import '../constants.dart';
 import '../db.dart';
 import '../lan_sync.dart';
@@ -258,4 +259,197 @@ Future<void> pickAndImportBackup(BuildContext context) async {
       content: Text('Backup imported. This device now matches that file.'),
     ),
   );
+}
+
+Future<void> showCloudSyncDialog(BuildContext parent) async {
+  final CloudSyncSettings settings = await CloudSyncSettings.load();
+  if (!parent.mounted) return;
+  await showDialog<void>(
+    context: parent,
+    builder: (BuildContext context) => _CloudSyncDialog(
+      parent: parent,
+      settings: settings,
+    ),
+  );
+}
+
+class _CloudSyncDialog extends StatefulWidget {
+  const _CloudSyncDialog({required this.parent, required this.settings});
+
+  final BuildContext parent;
+  final CloudSyncSettings settings;
+
+  @override
+  State<_CloudSyncDialog> createState() => _CloudSyncDialogState();
+}
+
+class _CloudSyncDialogState extends State<_CloudSyncDialog> {
+  late final TextEditingController _url;
+  late final TextEditingController _code;
+  bool _busy = false;
+  String? _status;
+
+  @override
+  void initState() {
+    super.initState();
+    _url = TextEditingController(text: widget.settings.url);
+    _code = TextEditingController(
+      text: widget.settings.code.isEmpty
+          ? ''
+          : formatSyncCode(widget.settings.code),
+    );
+  }
+
+  @override
+  void dispose() {
+    _url.dispose();
+    _code.dispose();
+    super.dispose();
+  }
+
+  Future<void> _persist() async {
+    widget.settings.url = _url.text;
+    widget.settings.code = _code.text;
+    await widget.settings.save();
+  }
+
+  Future<void> _run(Future<void> Function() action) async {
+    setState(() {
+      _busy = true;
+      _status = null;
+    });
+    try {
+      await _persist();
+      await action();
+    } catch (error) {
+      if (mounted) setState(() => _status = error.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        backgroundColor: kSurface,
+        title: const Text('Sync over internet', style: TextStyle(fontSize: 16)),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const Text(
+                  'Uses a free Firebase Realtime Database as one shared slot. '
+                  'Same idea as Wi-Fi sync: the receiving device is fully replaced. '
+                  'Create a project once, paste the database URL on both devices, '
+                  'and use the same code.',
+                  style: TextStyle(color: kTextMuted, fontSize: 12),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  '1. console.firebase.google.com → add project\n'
+                  '2. Build → Realtime Database → Create (start in test mode)\n'
+                  '3. Copy the URL (ends with firebasedatabase.app)\n'
+                  '4. Generate a code here and type it on the other device\n'
+                  '5. Upload from the device you last used, then download there',
+                  style: TextStyle(color: kTextMuted, fontSize: 12),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _url,
+                  enabled: !_busy,
+                  keyboardType: TextInputType.url,
+                  decoration: fieldDecoration(
+                    'Realtime Database URL',
+                    hint: 'https://….firebasedatabase.app',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _code,
+                  enabled: !_busy,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: fieldDecoration(
+                    'Sync code',
+                    hint: 'XXXX-XXXX',
+                    suffix: IconButton(
+                      tooltip: 'Copy',
+                      onPressed: () {
+                        Clipboard.setData(
+                          ClipboardData(text: formatSyncCode(_code.text)),
+                        );
+                        setState(() => _status = 'Code copied.');
+                      },
+                      icon: const Icon(Icons.copy, size: 16),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: _busy
+                      ? null
+                      : () {
+                          final String next = generateSyncCode();
+                          setState(() {
+                            _code.text = formatSyncCode(next);
+                            _status = 'New code. Use this on both devices.';
+                          });
+                        },
+                  child: const Text('Generate code'),
+                ),
+                if (_status != null) ...<Widget>[
+                  const SizedBox(height: 8),
+                  Text(
+                    _status!,
+                    style: const TextStyle(color: kTextMuted, fontSize: 12),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: _busy ? null : () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+          OutlinedButton(
+            onPressed: _busy
+                ? null
+                : () => _run(() async {
+                      final String tmp =
+                          await downloadDatabaseFromCloud(widget.settings);
+                      if (!widget.parent.mounted) return;
+                      final bool ok = await confirmReplaceDialog(widget.parent);
+                      if (!ok) return;
+                      if (!widget.parent.mounted) return;
+                      await widget.parent.read<AppStore>().importBackup(tmp);
+                      if (mounted) {
+                        setState(
+                          () => _status = 'This device now has the cloud copy.',
+                        );
+                      }
+                    }),
+            child: const Text('Download'),
+          ),
+          FilledButton(
+            onPressed: _busy
+                ? null
+                : () => _run(() async {
+                      await uploadDatabaseToCloud(
+                        db: widget.parent.read<AppStore>().db,
+                        settings: widget.settings,
+                      );
+                      if (mounted) {
+                        setState(
+                          () => _status =
+                              'Uploaded. Download on the other device.',
+                        );
+                      }
+                    }),
+            child: const Text('Upload'),
+          ),
+        ],
+      );
 }
