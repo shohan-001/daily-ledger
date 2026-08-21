@@ -361,6 +361,8 @@ class AppDatabase {
                   WHEN 'income' THEN t.amount
                   WHEN 'expense' THEN -t.amount
                   WHEN 'transfer' THEN -t.amount
+                  WHEN 'lend' THEN CASE WHEN t.is_settlement = 1 THEN -t.amount ELSE 0 END
+                  WHEN 'borrow' THEN CASE WHEN t.is_settlement = 1 THEN t.amount ELSE 0 END
                   ELSE 0
                 END)
                 FROM transactions t WHERE t.account_id = accounts.id
@@ -619,6 +621,21 @@ class AppDatabase {
     );
     if (rows.isEmpty) return null;
     return (rows.first['account_id'] as num).toInt();
+  }
+
+  /// Money paid back to settle a borrow, inside a date range.
+  double settlementPaid(DateTime from, DateTime to) {
+    final Object? total = _db
+        .select(
+          '''
+          SELECT SUM(amount) AS total FROM transactions
+          WHERE type = 'lend' AND is_settlement = 1
+            AND date >= ? AND date <= ?
+          ''',
+          <Object?>[isoDate(from), isoDate(to)],
+        )
+        .first['total'];
+    return (total as num?)?.toDouble() ?? 0;
   }
 
   /// Expense totals per category inside a date range (`null` key = no category).

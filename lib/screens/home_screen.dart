@@ -145,9 +145,8 @@ class _DailyPanelState extends State<_DailyPanel> {
   @override
   Widget build(BuildContext context) {
     final List<Txn> dayTxns = widget.store.query(from: _day, to: _day);
-    final List<Txn> expenses = dayTxns
-        .where((Txn txn) => txn.type == TxType.expense)
-        .toList();
+    final List<Txn> expenses =
+        dayTxns.where((Txn txn) => txn.countsAsSpend).toList();
     final double spent = expenses.fold<double>(
       0,
       (double sum, Txn txn) => sum + txn.amount,
@@ -495,7 +494,24 @@ class _IouPanel extends StatelessWidget {
       ),
     );
     if (confirmed == true) {
-      store.settlePerson(person, accountId: account?.id);
+      final int? id = store.settlePerson(person, accountId: account?.id);
+      if (!context.mounted || id == null) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            theyOwe
+                ? 'Collected ${formatMoney(amount)} from ${person.name}.'
+                : 'Paid ${formatMoney(amount)} to ${person.name}.',
+          ),
+          action: SnackBarAction(
+            label: 'Undo',
+            onPressed: () => store.deleteTransaction(id),
+          ),
+          persist: false,
+          duration: const Duration(seconds: 5),
+          showCloseIcon: true,
+        ),
+      );
     }
   }
 
@@ -565,19 +581,14 @@ class _IouPanel extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    IconButton(
-                      tooltip: 'Settle',
+                    const SizedBox(width: 4),
+                    TextButton.icon(
                       onPressed: () => _settle(context, person),
-                      icon: Icon(
-                        Icons.check_circle_outline,
-                        size: 20,
-                        color: theyOwe ? kLend : kBorrow,
-                      ),
-                      visualDensity: VisualDensity.compact,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 36,
-                        minHeight: 36,
+                      icon: const Icon(Icons.check_circle_outline, size: 18),
+                      label: const Text('Settle'),
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        foregroundColor: theyOwe ? kLend : kBorrow,
                       ),
                     ),
                   ],

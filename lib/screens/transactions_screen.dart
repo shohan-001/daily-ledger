@@ -308,7 +308,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   List<Widget> _groupedRows(BuildContext context, List<Txn> results) {
     final Map<DateTime, double> spentPerDay = <DateTime, double>{};
     for (final Txn txn in results) {
-      if (txn.type != TxType.expense) continue;
+      if (!txn.countsAsSpend) continue;
       final DateTime day = dayStart(txn.date);
       spentPerDay[day] = (spentPerDay[day] ?? 0) + txn.amount;
     }

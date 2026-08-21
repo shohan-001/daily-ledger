@@ -58,6 +58,8 @@ void main() {
     );
     expect(foodTab.signedAmount, 0);
     expect(paidBack.signedAmount, -254);
+    expect(foodTab.countsAsSpend, isFalse);
+    expect(paidBack.countsAsSpend, isTrue);
   });
 
   test('person IOU nets lend against borrow', () {

@@ -43,7 +43,7 @@ class AppStore extends ChangeNotifier {
     final DateTime to = monthEnd(month);
     spentByCategory = _db.expenseByCategory(from, to);
     final Map<TxType, double> totals = _db.totalsByType(from, to);
-    monthExpense = totals[TxType.expense] ?? 0;
+    monthExpense = (totals[TxType.expense] ?? 0) + _db.settlementPaid(from, to);
     monthIncome = totals[TxType.income] ?? 0;
     monthLent = totals[TxType.lend] ?? 0;
     monthBorrowed = totals[TxType.borrow] ?? 0;
@@ -159,15 +159,16 @@ class AppStore extends ChangeNotifier {
   }
 
   /// Pay or collect the open IOU with [person]. Cash always moves.
-  void settlePerson(PersonBalance person, {int? accountId}) {
+  /// Returns the new row id so the UI can offer Undo.
+  int? settlePerson(PersonBalance person, {int? accountId}) {
     final double net = person.net;
-    if (net == 0) return;
+    if (net == 0) return null;
     final int? payFrom = accountId ??
         _db.lastAccountIdForPerson(person.name) ??
         cashAccount?.id;
-    if (payFrom == null) return;
+    if (payFrom == null) return null;
     final bool theyOwe = net > 0;
-    saveTransaction(
+    final int id = _db.insertTransaction(
       Txn(
         amount: net.abs(),
         type: theyOwe ? TxType.borrow : TxType.lend,
@@ -178,6 +179,9 @@ class AppStore extends ChangeNotifier {
         isSettlement: true,
       ),
     );
+    _db.recomputeBalances();
+    reload();
+    return id;
   }
 
   List<Txn> query({

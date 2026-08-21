@@ -2,6 +2,11 @@ name: Windows exe
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Attach the zip to this GitHub release (e.g. v0.2.7). Leave empty to only upload the artifact.'
+        required: false
+        default: ''
   push:
     tags:
       - 'v*'
@@ -12,6 +17,9 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
+    env:
+      # MSVC 14.44+ errors on <experimental/coroutine> used by local_auth_windows.
+      CL: /D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
     steps:
       - uses: actions/checkout@v4
 
@@ -45,7 +53,8 @@ jobs:
           path: dailyledger-windows-x64.zip
 
       - name: Attach zip to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.release_tag != ''
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event.inputs.release_tag || github.ref_name }}
           files: dailyledger-windows-x64.zip

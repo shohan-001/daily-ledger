@@ -192,8 +192,16 @@ class _TransactionEditScreenState extends State<TransactionEditScreen> {
           context: context,
           builder: (BuildContext context) => AlertDialog(
             backgroundColor: kSurface,
-            title: const Text('Delete transaction?'),
-            content: const Text('This cannot be undone.'),
+        title: Text(
+          widget.existing?.isSettlement == true
+              ? 'Undo this settle?'
+              : 'Delete transaction?',
+        ),
+        content: Text(
+          widget.existing?.isSettlement == true
+              ? 'The IOU with ${widget.existing!.person} comes back, and cash is reversed.'
+              : 'This cannot be undone.',
+        ),
             actions: <Widget>[
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
@@ -201,7 +209,10 @@ class _TransactionEditScreenState extends State<TransactionEditScreen> {
               ),
               TextButton(
                 onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Delete', style: TextStyle(color: kExpense)),
+                child: Text(
+                  widget.existing?.isSettlement == true ? 'Undo settle' : 'Delete',
+                  style: const TextStyle(color: kExpense),
+                ),
               ),
             ],
           ),
@@ -233,11 +244,15 @@ class _TransactionEditScreenState extends State<TransactionEditScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: kSurface,
-        title: Text(editing ? 'Edit transaction' : 'Add transaction'),
+        title: Text(
+          editing
+              ? (widget.existing!.isSettlement ? 'Settled' : 'Edit transaction')
+              : 'Add transaction',
+        ),
         actions: <Widget>[
           if (editing)
             IconButton(
-              tooltip: 'Delete',
+              tooltip: widget.existing!.isSettlement ? 'Undo settle' : 'Delete',
               onPressed: _delete,
               icon: const Icon(Icons.delete_outline, color: kExpense),
             ),
@@ -474,8 +489,14 @@ class _TransactionEditScreenState extends State<TransactionEditScreen> {
                   height: 48,
                   width: double.infinity,
                   child: FilledButton(
-                    onPressed: _save,
-                    child: Text(editing ? 'Save changes' : 'Add transaction'),
+                    onPressed: widget.existing?.isSettlement == true
+                        ? _delete
+                        : _save,
+                    child: Text(
+                      widget.existing?.isSettlement == true
+                          ? 'Undo settle'
+                          : (editing ? 'Save changes' : 'Add transaction'),
+                    ),
                   ),
                 ),
               ),

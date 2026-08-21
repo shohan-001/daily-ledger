@@ -191,6 +191,10 @@ class Txn {
         isSettlement: isSettlement ?? this.isSettlement,
       );
 
+  /// Paying back a borrow (settle as lend) is spend. Collecting is not.
+  bool get countsAsSpend =>
+      type == TxType.expense || (isSettlement && type == TxType.lend);
+
   /// Effect on pocket cash. Goods/tabs do not move it until you settle.
   double get signedAmount {
     if (type == TxType.transfer) return 0;
