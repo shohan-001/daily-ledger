@@ -39,6 +39,27 @@ void main() {
     expect(TxType.borrow.usesCategory, isFalse);
   });
 
+  test('goods or tab IOUs do not move pocket cash until settled', () {
+    final Txn foodTab = Txn(
+      amount: 254,
+      type: TxType.borrow,
+      accountId: 1,
+      date: DateTime(2026, 8, 21),
+      person: 'Sashee',
+      inKind: true,
+    );
+    final Txn paidBack = Txn(
+      amount: 254,
+      type: TxType.lend,
+      accountId: 1,
+      date: DateTime(2026, 8, 21),
+      person: 'Sashee',
+      isSettlement: true,
+    );
+    expect(foodTab.signedAmount, 0);
+    expect(paidBack.signedAmount, -254);
+  });
+
   test('person IOU nets lend against borrow', () {
     const PersonBalance both = PersonBalance(
       name: 'Rahul',

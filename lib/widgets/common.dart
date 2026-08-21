@@ -172,6 +172,14 @@ class TxnTile extends StatelessWidget {
     final String title = switch (txn.type) {
       TxType.transfer =>
         '${store.accountName(txn.accountId)} → ${store.accountName(txn.toAccountId)}',
+      TxType.lend when txn.isSettlement =>
+        txn.person.isEmpty ? 'Paid back' : 'Paid ${txn.person}',
+      TxType.borrow when txn.isSettlement =>
+        txn.person.isEmpty ? 'Collected' : 'Collected from ${txn.person}',
+      TxType.lend when txn.inKind =>
+        txn.person.isEmpty ? 'Tab (lent)' : 'Tab · ${txn.person} owes you',
+      TxType.borrow when txn.inKind =>
+        txn.person.isEmpty ? 'Tab (borrowed)' : 'Tab · you owe ${txn.person}',
       TxType.lend =>
         txn.person.isEmpty ? 'Lent' : 'Lent to ${txn.person}',
       TxType.borrow =>
@@ -182,14 +190,17 @@ class TxnTile extends StatelessWidget {
     final List<String> subtitleParts = <String>[
       formatDateHeader(txn.date),
       if (txn.type != TxType.transfer) store.accountName(txn.accountId),
+      if (txn.inKind && !txn.isSettlement) 'no cash yet',
       if (txn.note.isNotEmpty) txn.note,
     ];
 
-    final String amountText = switch (txn.type) {
-      TxType.expense || TxType.lend => '-${formatMoney(txn.amount)}',
-      TxType.income || TxType.borrow => '+${formatMoney(txn.amount)}',
-      TxType.transfer => formatMoney(txn.amount),
-    };
+    final String amountText = txn.inKind && !txn.isSettlement
+        ? formatMoney(txn.amount)
+        : switch (txn.type) {
+            TxType.expense || TxType.lend => '-${formatMoney(txn.amount)}',
+            TxType.income || TxType.borrow => '+${formatMoney(txn.amount)}',
+            TxType.transfer => formatMoney(txn.amount),
+          };
 
     return InkWell(
       onTap: onTap,
@@ -231,6 +242,11 @@ class TxnTile extends StatelessWidget {
                         const Padding(
                           padding: EdgeInsets.only(left: 6),
                           child: Icon(Icons.repeat, size: 13, color: kTextMuted),
+                        ),
+                      if (txn.isSettlement)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 6),
+                          child: Icon(Icons.check_circle, size: 13, color: kAccent),
                         ),
                     ],
                   ),

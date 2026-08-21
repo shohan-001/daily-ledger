@@ -85,6 +85,8 @@ class HomeScreen extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 20),
+        _DailyPanel(store: store),
+        const SizedBox(height: 14),
         Panel(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
           child: Column(
@@ -100,16 +102,130 @@ class HomeScreen extends StatelessWidget {
               if (store.recent.isEmpty)
                 const EmptyHint('No transactions yet. Add your first one above.')
               else
-                ...store.recent.map(
-                  (Txn txn) => TxnTile(
-                    txn: txn,
-                    onTap: () => openTransactionEditor(context, existing: txn),
-                  ),
-                ),
+                ...store.recent.take(5).map(
+                      (Txn txn) => TxnTile(
+                        txn: txn,
+                        onTap: () =>
+                            openTransactionEditor(context, existing: txn),
+                      ),
+                    ),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+class _DailyPanel extends StatefulWidget {
+  const _DailyPanel({required this.store});
+
+  final AppStore store;
+
+  @override
+  State<_DailyPanel> createState() => _DailyPanelState();
+}
+
+class _DailyPanelState extends State<_DailyPanel> {
+  DateTime _day = dayStart(DateTime.now());
+
+  DateTime get _today => dayStart(DateTime.now());
+
+  bool get _isToday => _day == _today;
+
+  void _previousDay() =>
+      setState(() => _day = _day.subtract(const Duration(days: 1)));
+
+  void _nextDay() {
+    final DateTime next = _day.add(const Duration(days: 1));
+    if (next.isAfter(_today)) return;
+    setState(() => _day = next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Txn> dayTxns = widget.store.query(from: _day, to: _day);
+    final List<Txn> expenses = dayTxns
+        .where((Txn txn) => txn.type == TxType.expense)
+        .toList();
+    final double spent = expenses.fold<double>(
+      0,
+      (double sum, Txn txn) => sum + txn.amount,
+    );
+    final double income = dayTxns
+        .where((Txn txn) => txn.type == TxType.income)
+        .fold<double>(0, (double sum, Txn txn) => sum + txn.amount);
+
+    return Panel(
+      padding: const EdgeInsets.fromLTRB(16, 10, 8, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  '${formatDateHeader(_day)} · spent'.toUpperCase(),
+                  style: const TextStyle(
+                    color: kTextMuted,
+                    fontSize: 11,
+                    letterSpacing: 1.1,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Previous day',
+                visualDensity: VisualDensity.compact,
+                onPressed: _previousDay,
+                icon: const Icon(Icons.chevron_left),
+              ),
+              IconButton(
+                tooltip: 'Next day',
+                visualDensity: VisualDensity.compact,
+                onPressed: _isToday ? null : _nextDay,
+                icon: const Icon(Icons.chevron_right),
+              ),
+              if (!_isToday)
+                TextButton(
+                  onPressed: () => setState(() => _day = _today),
+                  child: const Text('Today'),
+                ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: <Widget>[
+                Text(
+                  formatMoney(spent),
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                    color: spent > 0 ? kExpense : kText,
+                  ),
+                ),
+                const Spacer(),
+                if (income > 0)
+                  Text(
+                    'Income ${formatMoney(income)}',
+                    style: const TextStyle(color: kTextMuted, fontSize: 12),
+                  ),
+              ],
+            ),
+          ),
+          if (expenses.isEmpty)
+            const EmptyHint('Nothing spent this day.')
+          else
+            ...expenses.map(
+              (Txn txn) => TxnTile(
+                txn: txn,
+                onTap: () => openTransactionEditor(context, existing: txn),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -165,12 +281,15 @@ class _BalancePanelState extends State<_BalancePanel> {
       pocket = null;
       bank = const <Account>[];
     }
-    final double cashAmount = pocket?.currentBalance ?? 0;
+    final double cashAmount = pocket?.ownBalance ?? 0;
+    final double pocketAmount = pocket?.currentBalance ?? 0;
+    final bool showIouTotal = store.owedToYou > 0 || store.youOwe > 0;
+    final bool canSwipe = bank.isNotEmpty || showIouTotal;
 
     return GestureDetector(
       onHorizontalDragEnd: (DragEndDetails details) {
         final double v = details.primaryVelocity ?? 0;
-        if (bank.isEmpty) return;
+        if (!canSwipe) return;
         if (v < -200) setState(() => _showTotal = true);
         if (v > 200) setState(() => _showTotal = false);
       },
@@ -178,35 +297,74 @@ class _BalancePanelState extends State<_BalancePanel> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            PanelTitle(_showTotal ? 'Total balance' : 'Cash'),
+            PanelTitle(_showTotal ? 'Total (yours)' : 'Cash'),
             const SizedBox(height: 6),
             Text(
-              formatMoney(_showTotal ? store.totalBalance : cashAmount),
+              formatMoney(_showTotal ? store.ownTotal : cashAmount),
               style: TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.w700,
-                color: (_showTotal ? store.totalBalance : cashAmount) < 0
+                color: (_showTotal ? store.ownTotal : cashAmount) < 0
                     ? kExpense
                     : kText,
               ),
             ),
+            if (!_showTotal && pocket != null && pocketAmount != cashAmount)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'In pocket ${formatMoney(pocketAmount)}  ·  includes cash you borrowed or lent',
+                  style: const TextStyle(color: kTextMuted, fontSize: 12),
+                ),
+              ),
             if (_showTotal) ...<Widget>[
               const SizedBox(height: 12),
               if (pocket != null) _accountLine(pocket.name, cashAmount),
               ...bank.map(
                 (Account account) =>
-                    _accountLine(account.name, account.currentBalance),
+                    _accountLine(account.name, account.ownBalance),
               ),
+              if (showIouTotal) ...<Widget>[
+                const SizedBox(height: 6),
+                _accountLine('Owed to you', store.owedToYou),
+                _accountLine('You owe', -store.youOwe),
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, bottom: 6),
+                  child: Row(
+                    children: <Widget>[
+                      const Expanded(
+                        child: Text(
+                          'Yours + IOUs',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        formatMoney(store.ownPlusIous),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: store.ownPlusIous < 0 ? kExpense : kText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const Text(
                 'Swipe right to show cash only.',
                 style: TextStyle(color: kTextMuted, fontSize: 11),
               ),
-            ] else if (bank.isNotEmpty)
-              const Padding(
-                padding: EdgeInsets.only(top: 10),
+            ] else if (canSwipe)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
                 child: Text(
-                  'Swipe left for total (cash + bank).',
-                  style: TextStyle(color: kTextMuted, fontSize: 11),
+                  showIouTotal
+                      ? 'Swipe left for bank total and cash + lend/borrow.'
+                      : 'Swipe left for total (cash + bank).',
+                  style: const TextStyle(color: kTextMuted, fontSize: 11),
                 ),
               ),
           ],
@@ -309,6 +467,38 @@ class _IouPanel extends StatelessWidget {
 
   final AppStore store;
 
+  Future<void> _settle(BuildContext context, PersonBalance person) async {
+    final bool theyOwe = person.net > 0;
+    final double amount = person.net.abs();
+    final Account? account = store.cashAccount;
+    final String accountName = account?.name ?? 'Cash';
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        backgroundColor: kSurface,
+        title: Text(theyOwe ? 'Collect from ${person.name}?' : 'Pay ${person.name}?'),
+        content: Text(
+          theyOwe
+              ? 'Take ${formatMoney(amount)} into $accountName to settle. Your cash goes up.'
+              : 'Pay ${formatMoney(amount)} from $accountName to settle. Your cash goes down.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Settle'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      store.settlePerson(person, accountId: account?.id);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final List<PersonBalance> open = store.people
@@ -339,6 +529,11 @@ class _IouPanel extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 6),
+          Text(
+            'Yours + IOUs  ${formatMoney(store.ownPlusIous)}',
+            style: const TextStyle(color: kTextMuted, fontSize: 12),
+          ),
           const SizedBox(height: 12),
           ...open.map(
             (PersonBalance person) {
@@ -368,6 +563,21 @@ class _IouPanel extends StatelessWidget {
                         color: theyOwe ? kLend : kBorrow,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Settle',
+                      onPressed: () => _settle(context, person),
+                      icon: Icon(
+                        Icons.check_circle_outline,
+                        size: 20,
+                        color: theyOwe ? kLend : kBorrow,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 36,
+                        minHeight: 36,
                       ),
                     ),
                   ],

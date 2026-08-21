@@ -35,6 +35,7 @@ class Account {
     required this.name,
     this.startingBalance = 0,
     this.currentBalance = 0,
+    this.ownBalance = 0,
     this.sortOrder = 0,
   });
 
@@ -42,8 +43,11 @@ class Account {
   final String name;
   final double startingBalance;
 
-  /// Derived column: recomputed from transactions after every write.
+  /// Pocket: starting balance plus every cash movement, including cash IOUs.
   final double currentBalance;
+
+  /// Yours: income, spend and transfers only — lend/borrow are excluded.
+  final double ownBalance;
   final int sortOrder;
 
   factory Account.fromRow(Map<String, Object?> row) => Account(
@@ -51,6 +55,8 @@ class Account {
         name: row['name'] as String,
         startingBalance: (row['starting_balance'] as num).toDouble(),
         currentBalance: (row['current_balance'] as num).toDouble(),
+        ownBalance: (row['own_balance'] as num?)?.toDouble() ??
+            (row['starting_balance'] as num).toDouble(),
         sortOrder: (row['sort_order'] as num).toInt(),
       );
 
@@ -60,6 +66,7 @@ class Account {
         name: name ?? this.name,
         startingBalance: startingBalance ?? this.startingBalance,
         currentBalance: currentBalance,
+        ownBalance: ownBalance,
         sortOrder: sortOrder ?? this.sortOrder,
       );
 }
@@ -114,6 +121,8 @@ class Txn {
     this.note = '',
     this.person = '',
     this.isRecurring = false,
+    this.inKind = false,
+    this.isSettlement = false,
   });
 
   final int? id;
@@ -133,6 +142,12 @@ class Txn {
   /// True when the row was created from a [RecurringRule].
   final bool isRecurring;
 
+  /// Food, goods, a tab — the person owes / is owed, but cash did not move yet.
+  final bool inKind;
+
+  /// Posted by the settle tick. Always moves cash to close the IOU.
+  final bool isSettlement;
+
   factory Txn.fromRow(Map<String, Object?> row) => Txn(
         id: row['id'] as int,
         amount: (row['amount'] as num).toDouble(),
@@ -143,7 +158,9 @@ class Txn {
         date: parseIsoDate(row['date'] as String),
         note: (row['note'] as String?) ?? '',
         person: (row['person'] as String?) ?? '',
-        isRecurring: (row['is_recurring'] as num).toInt() == 1,
+        isRecurring: (row['is_recurring'] as num?)?.toInt() == 1,
+        inKind: (row['in_kind'] as num?)?.toInt() == 1,
+        isSettlement: (row['is_settlement'] as num?)?.toInt() == 1,
       );
 
   Txn copyWith({
@@ -156,6 +173,8 @@ class Txn {
     String? note,
     String? person,
     bool? isRecurring,
+    bool? inKind,
+    bool? isSettlement,
   }) =>
       Txn(
         id: id,
@@ -168,15 +187,20 @@ class Txn {
         note: note ?? this.note,
         person: person ?? this.person,
         isRecurring: isRecurring ?? this.isRecurring,
+        inKind: inKind ?? this.inKind,
+        isSettlement: isSettlement ?? this.isSettlement,
       );
 
-  /// Effect of this transaction on the cash/card you hold.
-  /// Lend leaves your pocket; borrow arrives. Neither is spend or income.
-  double get signedAmount => switch (type) {
-        TxType.expense || TxType.lend => -amount,
-        TxType.income || TxType.borrow => amount,
-        TxType.transfer => 0,
-      };
+  /// Effect on pocket cash. Goods/tabs do not move it until you settle.
+  double get signedAmount {
+    if (type == TxType.transfer) return 0;
+    if ((type == TxType.lend || type == TxType.borrow) && inKind) return 0;
+    return switch (type) {
+      TxType.expense || TxType.lend => -amount,
+      TxType.income || TxType.borrow => amount,
+      TxType.transfer => 0,
+    };
+  }
 }
 
 /// Running IOU with one person. [net] > 0 means they owe you.

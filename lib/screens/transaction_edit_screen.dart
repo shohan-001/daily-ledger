@@ -44,6 +44,7 @@ class _TransactionEditScreenState extends State<TransactionEditScreen> {
   int? _toAccountId;
   int? _categoryId;
   late DateTime _date;
+  bool _inKind = false;
 
   @override
   void initState() {
@@ -68,6 +69,7 @@ class _TransactionEditScreenState extends State<TransactionEditScreen> {
     _categoryId = existing?.categoryId ??
         preset?.categoryId ??
         _firstCategoryId(_type);
+    _inKind = existing?.inKind ?? false;
   }
 
   @override
@@ -96,6 +98,7 @@ class _TransactionEditScreenState extends State<TransactionEditScreen> {
           ? (preset.categoryId ?? _firstCategoryId(preset.type))
           : null;
       _toAccountId = null;
+      if (!preset.type.usesPerson) _inKind = false;
     });
   }
 
@@ -120,6 +123,7 @@ class _TransactionEditScreenState extends State<TransactionEditScreen> {
           _categoryId = null;
         }
       }
+      if (!type.usesPerson) _inKind = false;
     });
   }
 
@@ -174,6 +178,8 @@ class _TransactionEditScreenState extends State<TransactionEditScreen> {
         note: _note.text.trim(),
         person: _type.usesPerson ? _person.text.trim() : '',
         isRecurring: widget.existing?.isRecurring ?? false,
+        inKind: _type.usesPerson ? _inKind : false,
+        isSettlement: widget.existing?.isSettlement ?? false,
       ),
     );
     Navigator.of(context).pop();
@@ -205,6 +211,17 @@ class _TransactionEditScreenState extends State<TransactionEditScreen> {
     if (!mounted) return;
     _store.deleteTransaction(id);
     Navigator.of(context).pop();
+  }
+
+  String _iouHint() {
+    if (_type == TxType.lend) {
+      return _inKind
+          ? 'They owe you. Your cash stays put until they settle.'
+          : 'Money leaves this account. They owe you.';
+    }
+    return _inKind
+        ? 'You owe them (they paid for food, etc.). Cash stays put until you settle.'
+        : 'Money arrives in this account. You owe them.';
   }
 
   @override
@@ -327,10 +344,45 @@ class _TransactionEditScreenState extends State<TransactionEditScreen> {
                     ],
                     if (_type.usesPerson) ...<Widget>[
                       const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: <Widget>[
+                          ChoiceChip(
+                            label: Text(
+                              _type == TxType.lend
+                                  ? 'I gave / paid cash'
+                                  : 'I received cash',
+                            ),
+                            selected: !_inKind,
+                            backgroundColor: kSurfaceAlt,
+                            selectedColor: kAccentFaint,
+                            side: BorderSide(
+                              color: !_inKind ? kAccent : kBorder,
+                            ),
+                            showCheckmark: false,
+                            onSelected: (_) => setState(() => _inKind = false),
+                          ),
+                          ChoiceChip(
+                            label: Text(
+                              _type == TxType.lend
+                                  ? 'No cash yet (goods / tab)'
+                                  : 'They paid for me (food / goods)',
+                            ),
+                            selected: _inKind,
+                            backgroundColor: kSurfaceAlt,
+                            selectedColor: kAccentFaint,
+                            side: BorderSide(
+                              color: _inKind ? kAccent : kBorder,
+                            ),
+                            showCheckmark: false,
+                            onSelected: (_) => setState(() => _inKind = true),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
                       Text(
-                        _type == TxType.lend
-                            ? 'Money leaves this account. They owe you.'
-                            : 'Money arrives in this account. You owe them.',
+                        _iouHint(),
                         style: const TextStyle(color: kTextMuted, fontSize: 12),
                       ),
                       const SizedBox(height: 16),

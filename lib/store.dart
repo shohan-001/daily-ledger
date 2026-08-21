@@ -82,6 +82,10 @@ class AppStore extends ChangeNotifier {
   double get totalBalance =>
       accounts.fold<double>(0, (double sum, Account a) => sum + a.currentBalance);
 
+  /// Cash you actually own across accounts — lend/borrow not mixed in.
+  double get ownTotal =>
+      accounts.fold<double>(0, (double sum, Account a) => sum + a.ownBalance);
+
   double get owedToYou => people.fold<double>(
         0,
         (double sum, PersonBalance p) => sum + (p.net > 0 ? p.net : 0),
@@ -91,6 +95,16 @@ class AppStore extends ChangeNotifier {
         0,
         (double sum, PersonBalance p) => sum + (p.net < 0 ? -p.net : 0),
       );
+
+  /// Your cash plus what friends still owe, minus what you still owe.
+  double get ownPlusIous => ownTotal + owedToYou - youOwe;
+
+  Account? get cashAccount {
+    for (final Account account in accounts) {
+      if (account.name.trim().toLowerCase() == 'cash') return account;
+    }
+    return accounts.isEmpty ? null : accounts.first;
+  }
 
   /// Overall monthly limit, or null when it has not been set.
   double? get overallLimit {
@@ -142,6 +156,28 @@ class AppStore extends ChangeNotifier {
     _db.deleteTransaction(id);
     _db.recomputeBalances();
     reload();
+  }
+
+  /// Pay or collect the open IOU with [person]. Cash always moves.
+  void settlePerson(PersonBalance person, {int? accountId}) {
+    final double net = person.net;
+    if (net == 0) return;
+    final int? payFrom = accountId ??
+        _db.lastAccountIdForPerson(person.name) ??
+        cashAccount?.id;
+    if (payFrom == null) return;
+    final bool theyOwe = net > 0;
+    saveTransaction(
+      Txn(
+        amount: net.abs(),
+        type: theyOwe ? TxType.borrow : TxType.lend,
+        accountId: payFrom,
+        date: dayStart(DateTime.now()),
+        note: 'Settled',
+        person: person.name,
+        isSettlement: true,
+      ),
+    );
   }
 
   List<Txn> query({

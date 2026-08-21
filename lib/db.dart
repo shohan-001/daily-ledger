@@ -87,6 +87,7 @@ class AppDatabase {
     db.execute('PRAGMA foreign_keys = ON;');
     final AppDatabase instance = AppDatabase._(db, path);
     instance._migrate();
+    instance.recomputeBalances();
     return instance;
   }
 
@@ -121,6 +122,7 @@ class AppDatabase {
     _db = sqlite3.open(filePath);
     _db.execute('PRAGMA foreign_keys = ON;');
     _migrate();
+    recomputeBalances();
   }
 
   static void assertValidBackup(String path) {
@@ -155,7 +157,7 @@ class AppDatabase {
   // Schema
   // -------------------------------------------------------------------------
 
-  static const int _schemaVersion = 2;
+  static const int _schemaVersion = 3;
 
   static const List<String> _schema = <String>[
     '''
@@ -185,7 +187,9 @@ class AppDatabase {
       date          TEXT    NOT NULL,
       note          TEXT    NOT NULL DEFAULT '',
       person        TEXT    NOT NULL DEFAULT '',
-      is_recurring  INTEGER NOT NULL DEFAULT 0
+      is_recurring  INTEGER NOT NULL DEFAULT 0,
+      in_kind       INTEGER NOT NULL DEFAULT 0,
+      is_settlement INTEGER NOT NULL DEFAULT 0
     )''',
     'CREATE INDEX idx_transactions_date ON transactions(date)',
     '''
@@ -231,8 +235,9 @@ class AppDatabase {
           _db.execute(statement);
         }
         _seed();
-      } else if (version == 1) {
-        _migrateToV2();
+      } else {
+        if (version < 2) _migrateToV2();
+        if (version < 3) _migrateToV3();
       }
       _db.execute('PRAGMA user_version = $_schemaVersion');
       _db.execute('COMMIT');
@@ -267,6 +272,16 @@ class AppDatabase {
     _db.execute('DROP TABLE transactions');
     _db.execute('ALTER TABLE transactions_new RENAME TO transactions');
     _db.execute('CREATE INDEX idx_transactions_date ON transactions(date)');
+  }
+
+  /// v2 → v3: goods/tab IOUs (no cash yet) and settle rows.
+  void _migrateToV3() {
+    _db.execute(
+      'ALTER TABLE transactions ADD COLUMN in_kind INTEGER NOT NULL DEFAULT 0',
+    );
+    _db.execute(
+      'ALTER TABLE transactions ADD COLUMN is_settlement INTEGER NOT NULL DEFAULT 0',
+    );
   }
 
   /// First-launch data: two accounts, boarding/uni categories, two presets.
@@ -338,7 +353,25 @@ class AppDatabase {
   // -------------------------------------------------------------------------
 
   List<Account> accounts() => _db
-      .select('SELECT * FROM accounts ORDER BY sort_order, id')
+      .select('''
+        SELECT accounts.*,
+          accounts.starting_balance
+            + COALESCE((
+                SELECT SUM(CASE t.type
+                  WHEN 'income' THEN t.amount
+                  WHEN 'expense' THEN -t.amount
+                  WHEN 'transfer' THEN -t.amount
+                  ELSE 0
+                END)
+                FROM transactions t WHERE t.account_id = accounts.id
+              ), 0)
+            + COALESCE((
+                SELECT SUM(t.amount) FROM transactions t
+                WHERE t.to_account_id = accounts.id AND t.type = 'transfer'
+              ), 0) AS own_balance
+        FROM accounts
+        ORDER BY sort_order, id
+      ''')
       .map((Row r) => Account.fromRow(r))
       .toList();
 
@@ -382,8 +415,11 @@ class AppDatabase {
         + COALESCE((
             SELECT SUM(CASE t.type
               WHEN 'income' THEN t.amount
-              WHEN 'borrow' THEN t.amount
-              ELSE -t.amount
+              WHEN 'expense' THEN -t.amount
+              WHEN 'transfer' THEN -t.amount
+              WHEN 'borrow' THEN CASE WHEN t.in_kind = 1 THEN 0 ELSE t.amount END
+              WHEN 'lend' THEN CASE WHEN t.in_kind = 1 THEN 0 ELSE -t.amount END
+              ELSE 0
             END)
             FROM transactions t WHERE t.account_id = accounts.id
           ), 0)
@@ -483,8 +519,9 @@ class AppDatabase {
   int insertTransaction(Txn txn) {
     _db.execute(
       'INSERT INTO transactions '
-      '(amount, type, account_id, to_account_id, category_id, date, note, person, is_recurring) '
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      '(amount, type, account_id, to_account_id, category_id, date, note, person, '
+      'is_recurring, in_kind, is_settlement) '
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       <Object?>[
         txn.amount,
         txn.type.name,
@@ -495,6 +532,8 @@ class AppDatabase {
         txn.note,
         txn.person,
         txn.isRecurring ? 1 : 0,
+        txn.inKind ? 1 : 0,
+        txn.isSettlement ? 1 : 0,
       ],
     );
     return _db.lastInsertRowId;
@@ -503,7 +542,7 @@ class AppDatabase {
   void updateTransaction(Txn txn) => _db.execute(
         'UPDATE transactions SET amount = ?, type = ?, account_id = ?, '
         'to_account_id = ?, category_id = ?, date = ?, note = ?, person = ?, '
-        'is_recurring = ? WHERE id = ?',
+        'is_recurring = ?, in_kind = ?, is_settlement = ? WHERE id = ?',
         <Object?>[
           txn.amount,
           txn.type.name,
@@ -514,6 +553,8 @@ class AppDatabase {
           txn.note,
           txn.person,
           txn.isRecurring ? 1 : 0,
+          txn.inKind ? 1 : 0,
+          txn.isSettlement ? 1 : 0,
           txn.id,
         ],
       );
@@ -526,7 +567,7 @@ class AppDatabase {
     final Map<TxType, double> result = <TxType, double>{};
     for (final Row row in _db.select(
       'SELECT type, SUM(amount) AS total FROM transactions '
-      'WHERE date >= ? AND date <= ? GROUP BY type',
+      'WHERE date >= ? AND date <= ? AND is_settlement = 0 GROUP BY type',
       <Object?>[isoDate(from), isoDate(to)],
     )) {
       result[TxType.parse(row['type'] as String)] =
@@ -564,6 +605,20 @@ class AppDatabase {
         return a.name.toLowerCase().compareTo(b.name.toLowerCase());
       });
     return list;
+  }
+
+  /// Account used on the latest lend/borrow for this person, if any.
+  int? lastAccountIdForPerson(String name) {
+    final ResultSet rows = _db.select(
+      '''
+      SELECT account_id FROM transactions
+      WHERE type IN ('lend', 'borrow') AND TRIM(person) = ?
+      ORDER BY date DESC, id DESC LIMIT 1
+      ''',
+      <Object?>[name.trim()],
+    );
+    if (rows.isEmpty) return null;
+    return (rows.first['account_id'] as num).toInt();
   }
 
   /// Expense totals per category inside a date range (`null` key = no category).
@@ -735,7 +790,7 @@ class AppDatabase {
                a.name  AS account,
                a2.name AS to_account,
                c.name  AS category,
-               t.person, t.note, t.is_recurring
+               t.person, t.note, t.is_recurring, t.in_kind, t.is_settlement
         FROM transactions t
         LEFT JOIN accounts   a  ON a.id  = t.account_id
         LEFT JOIN accounts   a2 ON a2.id = t.to_account_id
@@ -754,6 +809,8 @@ class AppDatabase {
           r['person'],
           r['note'],
           (r['is_recurring'] as num).toInt() == 1 ? 'yes' : 'no',
+          (r['in_kind'] as num?)?.toInt() == 1 ? 'yes' : 'no',
+          (r['is_settlement'] as num?)?.toInt() == 1 ? 'yes' : 'no',
         ],
       )
       .toList();
@@ -769,5 +826,7 @@ class AppDatabase {
     'person',
     'note',
     'is_recurring',
+    'in_kind',
+    'is_settlement',
   ];
 }
